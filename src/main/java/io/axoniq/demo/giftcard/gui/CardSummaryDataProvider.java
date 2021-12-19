@@ -39,6 +39,7 @@ public class CardSummaryDataProvider extends AbstractBackEndDataProvider<CardSum
      */
     private SubscriptionQueryResult<List<CardSummary>, CardSummary> fetchQueryResult;
     private SubscriptionQueryResult<CountCardSummariesResponse, CountChangedUpdate> countQueryResult;
+
     @Getter
     @Setter
     @NonNull

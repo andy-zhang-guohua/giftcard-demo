@@ -45,8 +45,10 @@ public class CardSummaryProjection {
      */
     @EventHandler
     public void on(IssuedEvent event) {
+        // 礼品卡发行事件发生时 持久化保存新发行的礼品卡
         entityManager.persist(new CardSummary(event.getId(), event.getAmount(), event.getAmount()));
 
+        // ? 意图
         queryUpdateEmitter.emit(CountCardSummariesQuery.class,
                                 query -> event.getId().startsWith(query.getFilter().getIdStartsWith()),
                                 new CountChangedUpdate());
@@ -64,6 +66,7 @@ public class CardSummaryProjection {
      */
     @EventHandler
     public void on(RedeemedEvent event) {
+        // 礼品卡消费事件发生时，从仓库中找到该礼品卡并修改其余额 = 期初余额 - 消费金额
         CardSummary summary = entityManager.find(CardSummary.class, event.getId());
         summary.setRemainingValue(summary.getRemainingValue() - event.getAmount());
 

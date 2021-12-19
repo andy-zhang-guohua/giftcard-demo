@@ -1,3 +1,58 @@
+# 2021-12-19
+- 改造和包装
+    - 参考以下文档改造项目使用 Java 8 (源语言和目标语言均使用 Java 8)
+        - [Quick Start](https://github.com/AxonIQ/reference-guide/blob/master/getting-started/quick-start.md)
+        - 目的 : 本地其他项目一直在使用 Java 8, 这个项目也统一改为 Java 8 方便IDE中统一调试
+        - 命令行也做相应改造   
+    - 汉化UI界面
+    - 边阅读代码边增加理解注释
+- 观察到的现象
+    - Axon服务器，应用启动后，
+        - 如果删除数据库表中的数据，或者删除数据库表，重启应用/Axon服务器都不会导致数据表中数据重建;
+            - 也就是说此时Axon服务器上的事件不会在数据库上重放形成数据
+        - 如果删掉整个数据库,重启应用会导致数据表重建，数据表中的数据也会重建;
+            - 也就是说此时Axon服务器上的事件会在数据库上重放形成数据        
+
+# 2021-12-18
+
+- 基于 Axon 官网例子项目 Giftcard 研究理解 Axon DDD 工作方式
+- Giftcard 官方例子应用项目基本情况
+    - 基于 Java 11
+    - Axon 框架版本 : 4.5.1
+    - Spring Boot 版本 : 2.5.1
+    - 前端页面使用了 Vaadin (8.2.0), 类似 GWT 技术，Java 语言实现前端页面和逻辑
+    - Command,Query,Event,Response 等对象的定义使用了 kotlin (1.5.10)
+    - 持久化机制定义使用了 Spring Data JPA + Hibernate
+    - 数据库使用了 H2
+
+- Axon应用启动需要 Axon 服务端
+    - 下载地址 : https://axoniq.io/download  -- 登记一些基本信息之后即可下载
+        - 下载标准版 (SE) : 4.5.9  (另有EE企业版收费)
+
+- AxonIQ 团队提供了在线创建Axon项目结构的初始化工具 : https://start.axoniq.io/
+
+- Axon 参考手册 : https://docs.axoniq.io/reference-guide/ 
+    - 参考手册源代码 : https://github.com/AxonIQ/reference-guide
+
+- 改造和包装
+    - 本地额外安装 JDK 17 用以支持例子应用缺省的Java语言版本要求
+    - 增加命令行分别启动 Giftcard应用 和 Axon服务端
+        - Giftcard应用启动命令行 : startup.bat  (使用 Java 17)
+        - Axon服务端启动命令行 : run-axon-server.bat  (使用 Java 17)
+    - 数据库从 H2 切换到 MySQL
+        - localhost:3306,axon_giftcard, root/Passw0rd,utf-8
+
+- 启动
+    1. 启动 Axon Server : run-axon-server.bat
+        - 访问位置 : http://localhost:8024/
+    2. 启动 Giftcard 应用 : startup.bat
+        - 访问位置 : http://localhost:8080/
+        
+- 创建根管理员用户 Axon Server
+    1. root/Passw0rd, 管理员
+    2. andy/andy123, 非管理员
+    
+
 Getting started with Axon
 =========================
 

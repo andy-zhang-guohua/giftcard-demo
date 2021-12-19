@@ -5,22 +5,8 @@ import com.vaadin.server.DefaultErrorHandler;
 import com.vaadin.server.Page;
 import com.vaadin.server.VaadinRequest;
 import com.vaadin.spring.annotation.SpringUI;
-import com.vaadin.ui.Alignment;
-import com.vaadin.ui.Button;
-import com.vaadin.ui.FormLayout;
-import com.vaadin.ui.Grid;
-import com.vaadin.ui.HorizontalLayout;
-import com.vaadin.ui.Label;
-import com.vaadin.ui.Notification;
-import com.vaadin.ui.Panel;
-import com.vaadin.ui.TextField;
-import com.vaadin.ui.UI;
-import com.vaadin.ui.VerticalLayout;
-import io.axoniq.demo.giftcard.api.CardSummary;
-import io.axoniq.demo.giftcard.api.CountCardSummariesQuery;
-import io.axoniq.demo.giftcard.api.CountCardSummariesResponse;
-import io.axoniq.demo.giftcard.api.IssueCommand;
-import io.axoniq.demo.giftcard.api.RedeemCommand;
+import com.vaadin.ui.*;
+import io.axoniq.demo.giftcard.api.*;
 import org.axonframework.commandhandling.gateway.CommandGateway;
 import org.axonframework.queryhandling.QueryGateway;
 import org.slf4j.Logger;
@@ -41,8 +27,8 @@ public class GiftCardUI extends UI {
 
     private final static Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-    private final CommandGateway commandGateway;
-    private final QueryGateway queryGateway;
+    private final CommandGateway commandGateway; // 命令网关
+    private final QueryGateway queryGateway; // 查询网关
     private CardSummaryDataProvider cardSummaryDataProvider;
     private ScheduledFuture<?> updaterThread;
 
@@ -51,6 +37,14 @@ public class GiftCardUI extends UI {
         this.queryGateway = queryGateway;
     }
 
+    /**
+     * 初始化UI界面 (每当用户在浏览器中输入该页面地址访问该页面时会被调用 )
+     * 1. 布局
+     * 2. 组件
+     * 3. 组件的事件处理逻辑
+     *
+     * @param vaadinRequest
+     */
     @Override
     protected void init(VaadinRequest vaadinRequest) {
         HorizontalLayout commandBar = new HorizontalLayout();
@@ -89,66 +83,93 @@ public class GiftCardUI extends UI {
         // offset is in milliseconds
         ZoneOffset instantOffset = ZoneOffset.ofTotalSeconds(offset / 1000);
         StatusUpdater statusUpdater = new StatusUpdater(statusLabel, instantOffset);
+
+        // 新建数据更新线程,
+        //// 1. 使用了线程池方式，但是池中只有一个线程
+        //// 2. 线程新建之后1秒执行一次刷新，之后每隔5秒钟执行一次刷新
+        //// 3. 每次的刷新逻辑是 : statusUpdater
         updaterThread = Executors.newScheduledThreadPool(1).scheduleAtFixedRate(statusUpdater, 1000,
-                                                                                5000, TimeUnit.MILLISECONDS);
+                5000, TimeUnit.MILLISECONDS);
+
+        // 设置页面数据拉取间隔 : 1秒
         setPollInterval(1000);
-        getSession().getSession().setMaxInactiveInterval(30);
+
+        // 设置用户会话时长 : 60分钟
+        getSession().getSession().setMaxInactiveInterval(60 * 60);
+
+        // 页面关闭时的处理逻辑 : 其实只是在该页面的地址栏中重新输入相应URL，或者重新回车时才会被调用 -- 2021-12-19
+        //// 问题 : 关闭浏览器TAB或者关闭浏览器时为什么不执行该方法 ?
         addDetachListener((DetachListener) detachEvent -> {
             logger.warn("Closing UI");
+
+            // 取消被调度的页面状态拉取任务
             updaterThread.cancel(true);
         });
+
     }
 
+    /**
+     * 构造 礼品卡发行 功能面板
+     *
+     * @return
+     */
     private Panel issuePanel() {
-        TextField id = new TextField("Card id");
-        TextField amount = new TextField("Amount");
-        Button submit = new Button("Submit");
+        TextField id = new TextField("礼品卡号");
+        TextField amount = new TextField("面额");
+        Button submit = new Button("提交");
 
         submit.addClickListener(evt -> {
             commandGateway.sendAndWait(new IssueCommand(id.getValue(), Integer.parseInt(amount.getValue())));
-            Notification.show("Success", Notification.Type.HUMANIZED_MESSAGE)
-                        .addCloseListener(e -> cardSummaryDataProvider.refreshAll());
+            Notification.show("成功", Notification.Type.HUMANIZED_MESSAGE)
+                    .addCloseListener(e -> cardSummaryDataProvider.refreshAll());
         });
 
         FormLayout form = new FormLayout();
         form.addComponents(id, amount, submit);
         form.setMargin(true);
 
-        Panel panel = new Panel("Issue single card");
+        Panel panel = new Panel("发行礼品卡");
         panel.setContent(form);
         return panel;
     }
 
+    /**
+     * 构造 批量礼品卡发行 功能面板
+     *
+     * @return
+     */
     private Panel bulkIssuePanel() {
-        TextField number = new TextField("Number");
-        TextField amount = new TextField("Amount");
-        Button submit = new Button("Submit");
-        Panel panel = new Panel("Bulk issue cards");
+        TextField number = new TextField("数量");
+        TextField amount = new TextField("面额");
+        Button submit = new Button("提交");
+        Panel panel = new Panel("批量发行礼品卡");
 
-        submit.addClickListener(evt -> {
-            submit.setEnabled(false);
-            new BulkIssuer(
-                    commandGateway,
-                    Integer.parseInt(number.getValue()),
-                    Integer.parseInt(amount.getValue()),
-                    bulkIssuer -> access(() -> {
-                        if (bulkIssuer.getRemaining().get() == 0) {
-                            submit.setEnabled(true);
-                            panel.setCaption("Bulk issue cards");
-                            Notification.show("Bulk issue card completed", Notification.Type.HUMANIZED_MESSAGE)
-                                        .addCloseListener(e -> cardSummaryDataProvider.refreshAll());
-                        } else {
-                            panel.setCaption(String.format(
-                                    "Progress: %d suc, %d fail, %d rem",
-                                    bulkIssuer.getSuccess().get(),
-                                    bulkIssuer.getError().get(),
-                                    bulkIssuer.getRemaining().get()
-                            ));
-                            cardSummaryDataProvider.refreshAll();
-                        }
-                    })
-            );
-        });
+        submit.addClickListener(// 按钮事件处理函数
+                evt -> {
+                    submit.setEnabled(false); // 禁用提交按钮
+                    new BulkIssuer(
+                            commandGateway, // 命令网关
+                            Integer.parseInt(number.getValue()), // 发行数量
+                            Integer.parseInt(amount.getValue()), // 每张礼品卡的面额
+                            // 回调函数 : 批量发行进度跟踪器
+                            bulkIssuer -> access(() -> {
+                                if (bulkIssuer.getRemaining().get() == 0) {
+                                    submit.setEnabled(true);
+                                    panel.setCaption("批量发行礼品卡");
+                                    Notification.show("批量发行礼品卡完成", Notification.Type.HUMANIZED_MESSAGE)
+                                            .addCloseListener(e -> cardSummaryDataProvider.refreshAll());
+                                } else {
+                                    panel.setCaption(String.format(
+                                            "进度: %d 成功, %d 失败, %d 待做",
+                                            bulkIssuer.getSuccess().get(),
+                                            bulkIssuer.getError().get(),
+                                            bulkIssuer.getRemaining().get()
+                                    ));
+                                    cardSummaryDataProvider.refreshAll();
+                                }
+                            })
+                    );
+                });
 
         FormLayout form = new FormLayout();
         form.addComponents(number, amount, submit);
@@ -158,37 +179,51 @@ public class GiftCardUI extends UI {
         return panel;
     }
 
+    /**
+     * 构建 礼品卡消费 功能面板
+     *
+     * @return
+     */
     private Panel redeemPanel() {
-        TextField id = new TextField("Card id");
-        TextField amount = new TextField("Amount");
-        Button submit = new Button("Submit");
+        TextField id = new TextField("礼品卡号");
+        TextField amount = new TextField("消费金额");
+        Button submit = new Button("提交");
 
         submit.addClickListener(evt -> {
             commandGateway.sendAndWait(new RedeemCommand(id.getValue(), Integer.parseInt(amount.getValue())));
-            Notification.show("Success", Notification.Type.HUMANIZED_MESSAGE)
-                        .addCloseListener(e -> cardSummaryDataProvider.refreshAll());
+            Notification.show("成功", Notification.Type.HUMANIZED_MESSAGE)
+                    .addCloseListener(e -> cardSummaryDataProvider.refreshAll());
         });
 
         FormLayout form = new FormLayout();
         form.addComponents(id, amount, submit);
         form.setMargin(true);
 
-        Panel panel = new Panel("Redeem card");
+        Panel panel = new Panel("礼品卡消费登记");
         panel.setContent(form);
         return panel;
     }
 
+    /**
+     * 构建 礼品卡列表 表格, 查询结果
+     * @return
+     */
     private Grid<CardSummary> summaryGrid() {
         cardSummaryDataProvider = new CardSummaryDataProvider(queryGateway);
         Grid<CardSummary> grid = new Grid<>();
-        grid.addColumn(CardSummary::getId).setCaption("Card ID");
-        grid.addColumn(CardSummary::getInitialValue).setCaption("Initial value");
-        grid.addColumn(CardSummary::getRemainingValue).setCaption("Remaining value");
+        grid.addColumn(CardSummary::getId).setCaption("礼品卡号");
+        grid.addColumn(CardSummary::getInitialValue).setCaption("面额");
+        grid.addColumn(CardSummary::getRemainingValue).setCaption("余额");
         grid.setSizeFull();
         grid.setDataProvider(cardSummaryDataProvider);
         return grid;
     }
 
+    /**
+     * UI界面状态更新器
+     * 1. 先查询礼品卡统计信息
+     * 2. 成功时返回结果，没有异常的话显示上一次查询的时间戳
+     */
     private class StatusUpdater implements Runnable {
 
         private final Label statusLabel;
@@ -201,13 +236,17 @@ public class GiftCardUI extends UI {
 
         @Override
         public void run() {
+            // 执行一次礼品卡查询，
+            //// 1. 使用参数对象 : new CountCardSummariesQuery() , 表示查询所有礼品卡
+            //// 2. 返回结果类型使用 CountCardSummariesResponse.class
+            //// 3. 如果查询正常，在状态条上显示最近一次查询的时间戳
             queryGateway.query(new CountCardSummariesQuery(), CountCardSummariesResponse.class)
-                        .whenComplete((r, exception) -> {
-                            if (exception == null) {
-                                statusLabel.setValue(Instant.ofEpochMilli(r.getLastEvent())
-                                                            .atOffset(instantOffset).toString());
-                            }
-                        });
+                    .whenComplete((r, exception) -> {
+                        if (exception == null) {
+                            // 如果没有异常，状态条上显示的是一个事件字符串
+                            statusLabel.setValue(Instant.ofEpochMilli(r.getLastEvent()).atOffset(instantOffset).toString());
+                        }
+                    });
         }
     }
 }

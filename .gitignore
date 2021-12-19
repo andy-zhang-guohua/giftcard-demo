@@ -23,3 +23,10 @@ dist/
 nbdist/
 .nb-gradle/
 *.jar
+
+### 数据
+data/
+
+### 运行时临时数据
+.run
+.mvn
