@@ -30,3 +30,6 @@ data/
 ### 运行时临时数据
 .run
 .mvn
+
+### Axon Server
+*.pid
